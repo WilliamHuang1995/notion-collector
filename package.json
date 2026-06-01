@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "refresh-users": "node scripts/refresh-users.js"
+    "refresh-users": "node scripts/refresh-users.js",
+    "build-cache": "node scripts/build-comments-cache.js"
   },
   "dependencies": {
     "@notionhq/client": "^2.2.15",

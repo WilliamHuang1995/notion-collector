@@ -168,6 +168,10 @@ async function buildCommentsCache(notion, cutoff) {
   console.log('Building RFC comments cache...');
   const cache = new Map(); // userId -> comments[]
 
+  // Get user lookup for resolving names
+  const users = await getWorkspaceUsers(notion);
+  const userNameMap = new Map(users.map(u => [u.id, u.name]));
+
   // Fetch all RFCs in window
   let cursor;
   const rfcPages = [];
@@ -182,7 +186,7 @@ async function buildCommentsCache(notion, cutoff) {
     cursor = response.has_more ? response.next_cursor : null;
   } while (cursor);
 
-  // Fetch comments for each RFC (batched to avoid rate limits)
+  // Fetch page-level comments for each RFC
   for (let i = 0; i < rfcPages.length; i += 5) {
     const batch = rfcPages.slice(i, i + 5);
     await Promise.all(batch.map(async (page) => {
@@ -196,12 +200,10 @@ async function buildCommentsCache(notion, cutoff) {
           const res = await notion.comments.list({ block_id: rfcId, start_cursor: commentCursor });
           for (const comment of res.results) {
             const userId = comment.created_by?.id;
-            const userName = comment.created_by?.name || '';
             if (!userId) continue;
-
+            const userName = userNameMap.get(userId) || '';
             const text = comment.rich_text?.map(t => t.plain_text).join('') || '';
             const entry = { rfcId, rfcTitle, rfcUrl, comment: text, createdAt: comment.created_time, userName };
-
             if (!cache.has(userId)) cache.set(userId, []);
             cache.get(userId).push(entry);
           }
