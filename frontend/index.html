@@ -441,18 +441,17 @@
       return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
-    // Load users from static file
+    // Load users — try static file first, fall back to API
     nameInput.placeholder = 'Loading...';
-    fetch('/users.json').then(r => r.json()).then(data => {
-      users = data;
-      usersLoaded = true;
-      nameInput.placeholder = 'Start typing...';
-      nameInput.disabled = false;
-      nameInput.focus();
-    }).catch(() => {
-      nameInput.placeholder = 'Failed to load users';
-      nameInput.disabled = false;
-    });
+    fetch('/users.json')
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(data => { users = data; usersLoaded = true; nameInput.placeholder = 'Start typing...'; nameInput.disabled = false; nameInput.focus(); })
+      .catch(() => {
+        fetch('/api/users')
+          .then(r => r.json())
+          .then(data => { users = data; usersLoaded = true; nameInput.placeholder = 'Start typing...'; nameInput.disabled = false; nameInput.focus(); })
+          .catch(() => { nameInput.placeholder = 'Failed to load users'; nameInput.disabled = false; });
+      });
 
     nameInput.addEventListener('input', () => {
       const q = nameInput.value.trim().toLowerCase();
