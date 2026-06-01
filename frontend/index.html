@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notion Collector</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #08090a;
+      --surface: #111214;
+      --surface-raised: #181a1e;
+      --border: #1f2228;
+      --border-subtle: #16181c;
+      --text: #e8e9eb;
+      --text-muted: #6b7080;
+      --text-dim: #3d4250;
+      --accent: #c4f04d;
+      --accent-dim: #3a4a1a;
+      --link: #8bb4f0;
+      --link-hover: #b8d4ff;
+      --green: #4ade80;
+      --green-bg: #0a2618;
+      --amber: #fbbf24;
+      --amber-bg: #1a1508;
+      --red: #f87171;
+      --red-bg: #1a0a0a;
+      --radius: 12px;
+      --font-display: 'Instrument Serif', serif;
+      --font-mono: 'IBM Plex Sans', sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-mono);
+      font-weight: 300;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 3rem 2rem;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    /* Subtle grain overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      opacity: 0.03;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    .header {
+      margin-bottom: 3rem;
+      position: relative;
+    }
+
+    .header h1 {
+      font-family: var(--font-display);
+      font-size: 2.8rem;
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      margin-bottom: 0.5rem;
+    }
+
+    .header h1 em {
+      font-style: italic;
+      color: var(--accent);
+    }
+
+    .header .subtitle {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
+    }
+
+    .header::after {
+      content: '';
+      display: block;
+      margin-top: 2rem;
+      height: 1px;
+      background: linear-gradient(90deg, var(--accent) 0%, var(--border) 60%, transparent 100%);
+    }
+
+    /* Controls */
+    .controls {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 2.5rem;
+      align-items: end;
+      flex-wrap: wrap;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      position: relative;
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .field label {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    input, select {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      font-weight: 400;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.7rem 1rem;
+      border-radius: var(--radius);
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+
+    input::placeholder { color: var(--text-dim); }
+
+    button {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      font-weight: 500;
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      padding: 0.7rem 1.5rem;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: transform 0.1s, opacity 0.2s;
+      letter-spacing: 0.02em;
+    }
+
+    button:hover { opacity: 0.9; transform: translateY(-1px); }
+    button:active { transform: translateY(0); }
+    button:disabled { background: var(--border); color: var(--text-dim); cursor: not-allowed; transform: none; }
+
+    .copy-btn {
+      background: var(--surface-raised);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      margin-left: auto;
+    }
+    .copy-btn:hover { color: var(--text); border-color: var(--accent); }
+    .copy-btn.copied { background: var(--green-bg); color: var(--green); border-color: var(--green); }
+
+    /* Autocomplete */
+    .autocomplete {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: var(--surface-raised);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-top: 6px;
+      max-height: 280px;
+      overflow-y: auto;
+      z-index: 100;
+      display: none;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+      backdrop-filter: blur(8px);
+    }
+    .autocomplete.open { display: block; animation: slideDown 0.15s ease-out; }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .ac-item {
+      padding: 0.6rem 1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      transition: background 0.1s;
+    }
+    .ac-item:hover, .ac-item.active { background: var(--border); }
+    .ac-item:first-child { border-radius: var(--radius) var(--radius) 0 0; }
+    .ac-item:last-child { border-radius: 0 0 var(--radius) var(--radius); }
+
+    .ac-avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--border); flex-shrink: 0; object-fit: cover; }
+    .ac-name { font-size: 0.85rem; color: var(--text); }
+    .ac-email { font-size: 0.7rem; color: var(--text-dim); }
+
+    /* Results */
+    .results { display: none; }
+    .results.visible { display: block; animation: fadeIn 0.3s ease-out; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.75rem;
+      margin-bottom: 1.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .section::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border), transparent);
+    }
+
+    .section h2 {
+      font-family: var(--font-display);
+      font-size: 1.4rem;
+      font-weight: 400;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .section h2::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      flex-shrink: 0;
+    }
+
+    /* Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .stat {
+      background: var(--bg);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 1rem 1.1rem;
+      transition: border-color 0.2s;
+    }
+
+    .stat:hover { border-color: var(--border); }
+
+    .stat .value {
+      font-family: var(--font-display);
+      font-size: 2rem;
+      font-weight: 400;
+      color: var(--text);
+      line-height: 1;
+    }
+
+    .stat .label {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      margin-top: 0.4rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    /* Lists */
+    .rfc-list { list-style: none; }
+    .rfc-list li {
+      padding: 0.7rem 0;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+    }
+    .rfc-list li:last-child { border-bottom: none; }
+    .rfc-list li:hover .rfc-title { color: var(--link-hover); }
+
+    .rfc-title {
+      color: var(--link);
+      text-decoration: none;
+      font-size: 0.82rem;
+      transition: color 0.15s;
+    }
+    .rfc-title:hover { color: var(--link-hover); }
+
+    .status-badge {
+      font-size: 0.6rem;
+      padding: 0.25rem 0.6rem;
+      border-radius: 20px;
+      font-weight: 500;
+      letter-spacing: 0.03em;
+      white-space: nowrap;
+      text-transform: uppercase;
+    }
+    .status-badge.reviewed { background: var(--green-bg); color: var(--green); border: 1px solid #1a3a2a; }
+    .status-badge.draft { background: var(--amber-bg); color: var(--amber); border: 1px solid #2a2010; }
+    .status-badge.ready { background: #0a1628; color: var(--link); border: 1px solid #1a2a40; }
+    .status-badge.other { background: var(--surface-raised); color: var(--text-muted); border: 1px solid var(--border); }
+
+    /* States */
+    .error {
+      background: var(--red-bg);
+      border: 1px solid #2a1515;
+      color: var(--red);
+      padding: 1rem 1.25rem;
+      border-radius: var(--radius);
+      margin-bottom: 1rem;
+      display: none;
+      font-size: 0.82rem;
+    }
+
+    .loading {
+      display: none;
+      color: var(--text-muted);
+      padding: 3rem;
+      text-align: center;
+      font-size: 0.85rem;
+    }
+
+    .loading::after {
+      content: '';
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      margin-left: 0.6rem;
+      animation: spin 0.8s linear infinite;
+      vertical-align: middle;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .empty { color: var(--text-dim); font-style: italic; font-size: 0.82rem; }
+
+    .warning-banner {
+      background: var(--amber-bg);
+      border: 1px solid #2a2010;
+      color: var(--amber);
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+    @media (max-width: 600px) {
+      body { padding: 1.5rem 1rem; }
+      .header h1 { font-size: 2rem; }
+      .controls { flex-direction: column; align-items: stretch; }
+      .field { min-width: unset; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Notion <em>Collector</em></h1>
+    <p class="subtitle">calibration evidence &mdash; rfcs, shared notes, incidents</p>
+  </div>
+
+  <div class="controls">
+    <div class="field">
+      <label>Engineer</label>
+      <input type="text" id="name" placeholder="Start typing..." autocomplete="off" disabled />
+      <div class="autocomplete" id="autocomplete"></div>
+    </div>
+    <div class="field" style="flex:0;min-width:140px;">
+      <label>Window</label>
+      <select id="months">
+        <option value="3">3 months</option>
+        <option value="6" selected>6 months</option>
+        <option value="12">12 months</option>
+      </select>
+    </div>
+    <button id="search" onclick="fetchStats()">Search</button>
+  </div>
+
+  <div class="error" id="error"></div>
+  <div class="loading" id="loading">Fetching from Notion API</div>
+
+  <div class="results" id="results">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:1.25rem;">
+      <button class="copy-btn" id="copy-btn" onclick="copyAsMarkdown()">Copy as Markdown</button>
+    </div>
+
+    <div class="section">
+      <h2>RFCs</h2>
+      <div class="stats-grid" id="rfc-stats"></div>
+      <ul class="rfc-list" id="rfc-list"></ul>
+    </div>
+
+    <div class="section">
+      <h2>Shared Notes</h2>
+      <div id="shared-notes-content"></div>
+    </div>
+
+    <div class="section">
+      <h2>Incidents</h2>
+      <div id="incidents-content"></div>
+    </div>
+  </div>
+
+  <script>
+    let users = [];
+    let usersLoaded = false;
+    let activeIndex = -1;
+    let lastData = null;
+    const nameInput = document.getElementById('name');
+    const ac = document.getElementById('autocomplete');
+
+    // XSS prevention
+    function esc(str) {
+      if (!str) return '';
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    // Load users from static file
+    nameInput.placeholder = 'Loading...';
+    fetch('/users.json').then(r => r.json()).then(data => {
+      users = data;
+      usersLoaded = true;
+      nameInput.placeholder = 'Start typing...';
+      nameInput.disabled = false;
+      nameInput.focus();
+    }).catch(() => {
+      nameInput.placeholder = 'Failed to load users';
+      nameInput.disabled = false;
+    });
+
+    nameInput.addEventListener('input', () => {
+      const q = nameInput.value.trim().toLowerCase();
+      if (q.length < 1) { ac.classList.remove('open'); return; }
+
+      const matches = users.filter(u =>
+        u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q)
+      ).slice(0, 8);
+
+      if (matches.length === 0) { ac.classList.remove('open'); return; }
+
+      activeIndex = -1;
+      ac.innerHTML = matches.map((u, i) => `
+        <div class="ac-item" data-name="${esc(u.name)}" data-index="${i}">
+          ${u.avatar ? `<img class="ac-avatar" src="${esc(u.avatar)}" />` : '<div class="ac-avatar"></div>'}
+          <div>
+            <div class="ac-name">${highlight(esc(u.name), q)}</div>
+            ${u.email ? `<div class="ac-email">${esc(u.email)}</div>` : ''}
+          </div>
+        </div>
+      `).join('');
+      ac.classList.add('open');
+
+      ac.querySelectorAll('.ac-item').forEach(el => {
+        el.addEventListener('click', () => selectUser(el.dataset.name));
+      });
+    });
+
+    nameInput.addEventListener('keydown', (e) => {
+      const items = ac.querySelectorAll('.ac-item');
+      if (!ac.classList.contains('open') || items.length === 0) {
+        if (e.key === 'Enter') fetchStats();
+        return;
+      }
+      if (e.key === 'ArrowDown') { e.preventDefault(); activeIndex = Math.min(activeIndex + 1, items.length - 1); updateActive(items); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); activeIndex = Math.max(activeIndex - 1, 0); updateActive(items); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (activeIndex >= 0) selectUser(items[activeIndex].dataset.name); else { ac.classList.remove('open'); fetchStats(); } }
+      else if (e.key === 'Escape') { ac.classList.remove('open'); }
+    });
+
+    nameInput.addEventListener('blur', () => { setTimeout(() => ac.classList.remove('open'), 150); });
+
+    function selectUser(name) {
+      nameInput.value = name;
+      ac.classList.remove('open');
+      fetchStats();
+    }
+
+    function updateActive(items) {
+      items.forEach((el, i) => el.classList.toggle('active', i === activeIndex));
+      if (activeIndex >= 0) items[activeIndex].scrollIntoView({ block: 'nearest' });
+    }
+
+    function highlight(text, q) {
+      if (!text) return '';
+      const idx = text.toLowerCase().indexOf(q);
+      if (idx === -1) return text;
+      return text.slice(0, idx) + '<strong style="color:var(--accent)">' + text.slice(idx, idx + q.length) + '</strong>' + text.slice(idx + q.length);
+    }
+
+    async function fetchStats() {
+      const name = document.getElementById('name').value.trim();
+      const months = document.getElementById('months').value;
+      if (!name) return;
+
+      const btn = document.getElementById('search');
+      const loading = document.getElementById('loading');
+      const error = document.getElementById('error');
+      const results = document.getElementById('results');
+
+      btn.disabled = true;
+      loading.style.display = 'block';
+      error.style.display = 'none';
+      results.style.display = 'none';
+      results.classList.remove('visible');
+
+      try {
+        const res = await fetch(`/api/stats?name=${encodeURIComponent(name)}&months=${months}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Request failed');
+        renderResults(data);
+      } catch (err) {
+        error.textContent = err.message;
+        error.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        loading.style.display = 'none';
+      }
+    }
+
+    function renderResults(data) {
+      lastData = data;
+      const results = document.getElementById('results');
+      results.style.display = 'block';
+      requestAnimationFrame(() => results.classList.add('visible'));
+
+      // RFC stats
+      const rfcStats = document.getElementById('rfc-stats');
+      const rfc = data.rfc;
+      rfcStats.innerHTML = `
+        <div class="stat"><div class="value">${rfc.total}</div><div class="label">Total RFCs</div></div>
+        <div class="stat"><div class="value">${rfc.reviewed}</div><div class="label">Reviewed</div></div>
+        <div class="stat"><div class="value">${rfc.avgDaysToReview !== null ? rfc.avgDaysToReview + 'd' : '—'}</div><div class="label">Avg to review</div></div>
+        <div class="stat"><div class="value">${rfc.statusBreakdown['Draft - not ready to be reviewed'] || 0}</div><div class="label">In Draft</div></div>
+      `;
+
+      // RFC list
+      const rfcList = document.getElementById('rfc-list');
+      if (rfc.titles.length === 0) {
+        rfcList.innerHTML = '<li class="empty">No RFCs found in this window</li>';
+      } else {
+        rfcList.innerHTML = rfc.titles.map(r => `
+          <li>
+            <a class="rfc-title" href="${esc(r.url)}" target="_blank">${esc(r.title)}</a>
+            <span class="status-badge ${statusClass(r.status)}">${esc(r.status)}</span>
+          </li>
+        `).join('');
+      }
+
+      // Shared notes
+      const sn = data.sharedNotes;
+      const snContent = document.getElementById('shared-notes-content');
+      if (!sn.found) {
+        snContent.innerHTML = `<p class="empty">${esc(sn.message)}</p>`;
+      } else {
+        let html = `
+          <div class="stats-grid">
+            <div class="stat"><div class="value">${sn.totalEntries}</div><div class="label">Entries in window</div></div>
+            <div class="stat"><div class="value">${sn.lastUpdated ? timeAgo(sn.lastUpdated) : '—'}</div><div class="label">Last updated</div></div>
+            <div class="stat"><div class="value">${sn.type}</div><div class="label">Format</div></div>
+          </div>
+        `;
+        if (sn.inaccessible > 0) {
+          html += `<div class="warning-banner">${sn.inaccessible} sub-page(s) inaccessible — connect integration at Engineering Home level</div>`;
+        }
+        if (sn.recentEntries && sn.recentEntries.length > 0) {
+          html += '<ul class="rfc-list">' + sn.recentEntries.map(e => `
+            <li>
+              <a class="rfc-title" href="${esc(e.url)}" target="_blank">${esc(e.title)}</a>
+              <span style="color:var(--text-dim);font-size:0.75rem">${new Date(e.lastEdited).toLocaleDateString()}</span>
+            </li>
+          `).join('') + '</ul>';
+        }
+        snContent.innerHTML = html;
+      }
+
+      // Incidents
+      const inc = data.incidents;
+      const incContent = document.getElementById('incidents-content');
+      if (inc.total === 0) {
+        incContent.innerHTML = '<p class="empty">No incident involvement in this window</p>';
+      } else {
+        let html = `
+          <div class="stats-grid">
+            <div class="stat"><div class="value">${inc.total}</div><div class="label">Incidents involved</div></div>
+            ${Object.entries(inc.roleBreakdown).map(([role, count]) =>
+              `<div class="stat"><div class="value">${count}</div><div class="label">${role}</div></div>`
+            ).join('')}
+          </div>
+        `;
+        html += '<ul class="rfc-list">' + inc.incidents.map(i => `
+          <li>
+            <div>
+              <a class="rfc-title" href="${esc(i.url)}" target="_blank">${esc(i.title)}</a>
+              ${i.summary ? `<div style="font-size:0.7rem;color:var(--text-dim);margin-top:3px;">${esc(i.summary.slice(0, 100))}${i.summary.length > 100 ? '...' : ''}</div>` : ''}
+            </div>
+            <span class="status-badge other">${esc(i.roles.join(', '))}</span>
+          </li>
+        `).join('') + '</ul>';
+        incContent.innerHTML = html;
+      }
+    }
+
+    function statusClass(status) {
+      if (status === 'Reviewed' || status === 'No comments') return 'reviewed';
+      if (status.includes('Draft')) return 'draft';
+      if (status.includes('Ready')) return 'ready';
+      return 'other';
+    }
+
+    function copyAsMarkdown() {
+      if (!lastData) return;
+      const d = lastData;
+      let md = `## ${d.engineer} — Notion Activity (${d.window})\n\n`;
+
+      md += `### RFCs\n`;
+      md += `- **Total:** ${d.rfc.total}\n`;
+      md += `- **Reviewed:** ${d.rfc.reviewed}\n`;
+      if (d.rfc.avgDaysToReview !== null) md += `- **Avg days to review:** ${d.rfc.avgDaysToReview}\n`;
+      md += `- **Status:** ${Object.entries(d.rfc.statusBreakdown).map(([k,v]) => `${k} (${v})`).join(', ')}\n\n`;
+      if (d.rfc.titles.length > 0) {
+        for (const r of d.rfc.titles) {
+          md += `- [${r.title}](${r.url}) — ${r.status}\n`;
+        }
+        md += '\n';
+      }
+
+      md += `### Shared Notes\n`;
+      const sn = d.sharedNotes;
+      if (!sn.found) {
+        md += `${sn.message}\n\n`;
+      } else {
+        md += `- **Total entries:** ${sn.totalEntries}\n`;
+        md += `- **Last updated:** ${sn.lastUpdated ? new Date(sn.lastUpdated).toLocaleDateString() : '—'}\n\n`;
+        if (sn.recentEntries) {
+          for (const e of sn.recentEntries) {
+            md += `- [${e.title}](${e.url}) — ${new Date(e.lastEdited).toLocaleDateString()}\n`;
+          }
+          md += '\n';
+        }
+      }
+
+      md += `### Incidents\n`;
+      const inc = d.incidents;
+      if (inc.total === 0) {
+        md += `No incident involvement in this window.\n`;
+      } else {
+        md += `- **Total:** ${inc.total}\n`;
+        md += `- **Roles:** ${Object.entries(inc.roleBreakdown).map(([k,v]) => `${k} (${v})`).join(', ')}\n\n`;
+        for (const i of inc.incidents) {
+          md += `- [${i.title}](${i.url}) — ${i.roles.join(', ')}\n`;
+        }
+      }
+
+      navigator.clipboard.writeText(md).then(() => {
+        const btn = document.getElementById('copy-btn');
+        btn.textContent = 'Copied';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copy as Markdown'; btn.classList.remove('copied'); }, 2000);
+      });
+    }
+
+    function timeAgo(dateStr) {
+      const diff = Date.now() - new Date(dateStr).getTime();
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      if (days === 0) return 'today';
+      if (days === 1) return '1d ago';
+      if (days < 30) return days + 'd ago';
+      if (days < 365) return Math.floor(days / 30) + 'mo ago';
+      return Math.floor(days / 365) + 'y ago';
+    }
+  </script>
+</body>
+</html>

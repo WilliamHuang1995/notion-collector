@@ -1,0 +1,20 @@
+{
+  "name": "notion-collector",
+  "version": "1.0.0",
+  "description": "Notion activity collector for calibration — RFCs and shared notes per engineer",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "refresh-users": "node scripts/refresh-users.js"
+  },
+  "dependencies": {
+    "@notionhq/client": "^2.2.15",
+    "dotenv": "^16.4.5",
+    "express": "^4.18.2",
+    "express-session": "^1.19.0",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0"
+  }
+}
