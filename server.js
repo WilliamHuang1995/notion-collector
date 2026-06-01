@@ -6,6 +6,7 @@ import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { Client } from '@notionhq/client';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -121,10 +122,35 @@ async function resolveUserIds(notion, name) {
     .map(u => u.id);
 }
 
-// Cache for RFC comments — built once, persists until redeploy
+// Cache for RFC comments — persisted to .cache/comments.json
+const CACHE_DIR = join(__dirname, '.cache');
+const COMMENTS_CACHE_FILE = join(CACHE_DIR, 'comments.json');
 let commentsCache = null; // Map<userId, [{ rfcId, rfcTitle, rfcUrl, comment, createdAt }]>
 let commentsCacheBuilding = false;
 let commentsCachePromise = null;
+
+function loadCacheFromDisk() {
+  try {
+    if (existsSync(COMMENTS_CACHE_FILE)) {
+      const data = JSON.parse(readFileSync(COMMENTS_CACHE_FILE, 'utf-8'));
+      commentsCache = new Map(Object.entries(data));
+      console.log(`Comments cache loaded from disk: ${[...commentsCache.values()].reduce((s, c) => s + c.length, 0)} comments`);
+      return true;
+    }
+  } catch { /* corrupt file, rebuild */ }
+  return false;
+}
+
+function saveCacheToDisk(cache) {
+  try {
+    if (!existsSync(CACHE_DIR)) mkdirSync(CACHE_DIR, { recursive: true });
+    const obj = Object.fromEntries(cache);
+    writeFileSync(COMMENTS_CACHE_FILE, JSON.stringify(obj));
+  } catch (err) { console.error('Failed to save comments cache:', err.message); }
+}
+
+// Try loading from disk on startup
+loadCacheFromDisk();
 
 async function getCommentsCache(notion, cutoff) {
   if (commentsCache) return commentsCache;
@@ -133,6 +159,7 @@ async function getCommentsCache(notion, cutoff) {
   commentsCacheBuilding = true;
   commentsCachePromise = buildCommentsCache(notion, cutoff);
   commentsCache = await commentsCachePromise;
+  saveCacheToDisk(commentsCache);
   commentsCacheBuilding = false;
   return commentsCache;
 }
@@ -225,16 +252,16 @@ app.get('/api/stats', requireAuth, notionClient, async (req, res) => {
       getIncidentStats(req.notion, name, userIds, cutoff),
       getCommentsCache(req.notion, cutoff).then(cache => {
         const comments = getCommentsForUser(cache, userIds);
-        const rfcsCommented = [...new Set(comments.map(c => c.rfcId))];
+        // Group by RFC
+        const byRfc = new Map();
+        for (const c of comments) {
+          if (!byRfc.has(c.rfcId)) byRfc.set(c.rfcId, { rfcTitle: c.rfcTitle, rfcUrl: c.rfcUrl, comments: [] });
+          byRfc.get(c.rfcId).comments.push({ comment: c.comment, createdAt: c.createdAt });
+        }
         return {
           total: comments.length,
-          rfcsCommented: rfcsCommented.length,
-          comments: comments.map(c => ({
-            rfcTitle: c.rfcTitle,
-            rfcUrl: c.rfcUrl,
-            comment: c.comment,
-            createdAt: c.createdAt,
-          })),
+          rfcsCommented: byRfc.size,
+          byRfc: [...byRfc.values()],
         };
       }),
     ]);

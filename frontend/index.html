@@ -641,15 +641,20 @@
             <div class="stat"><div class="value">${cmt.rfcsCommented}</div><div class="label">RFCs commented on</div></div>
           </div>
         `;
-        html += '<ul class="rfc-list">' + cmt.comments.map(c => `
-          <li>
-            <div>
-              <a class="rfc-title" href="${esc(c.rfcUrl)}" target="_blank">${esc(c.rfcTitle)}</a>
-              <div style="font-size:0.7rem;color:var(--text-dim);margin-top:3px;">${esc(c.comment.slice(0, 150))}${c.comment.length > 150 ? '...' : ''}</div>
-            </div>
-            <span style="color:var(--text-dim);font-size:0.75rem;white-space:nowrap">${new Date(c.createdAt).toLocaleDateString()}</span>
-          </li>
-        `).join('') + '</ul>';
+        html += cmt.byRfc.map(rfc => `
+          <div style="margin-bottom:1rem;">
+            <a class="rfc-title" href="${esc(rfc.rfcUrl)}" target="_blank" style="font-size:0.85rem;font-weight:500;">${esc(rfc.rfcTitle)}</a>
+            <span style="color:var(--text-dim);font-size:0.7rem;margin-left:0.5rem;">${rfc.comments.length} comment${rfc.comments.length > 1 ? 's' : ''}</span>
+            <ul class="rfc-list" style="margin-top:0.4rem;">
+              ${rfc.comments.map(c => `
+                <li style="padding:0.4rem 0;">
+                  <span style="font-size:0.75rem;color:var(--text-muted);">${esc(c.comment.slice(0, 200))}${c.comment.length > 200 ? '...' : ''}</span>
+                  <span style="color:var(--text-dim);font-size:0.7rem;white-space:nowrap">${new Date(c.createdAt).toLocaleDateString()}</span>
+                </li>
+              `).join('')}
+            </ul>
+          </div>
+        `).join('');
         cmtContent.innerHTML = html;
       }
     }
@@ -713,8 +718,12 @@
       } else {
         md += `- **Total comments:** ${cmt.total}\n`;
         md += `- **RFCs commented on:** ${cmt.rfcsCommented}\n\n`;
-        for (const c of cmt.comments) {
-          md += `- [${c.rfcTitle}](${c.rfcUrl}) — "${c.comment.slice(0, 100)}${c.comment.length > 100 ? '...' : ''}" (${new Date(c.createdAt).toLocaleDateString()})\n`;
+        for (const rfc of cmt.byRfc) {
+          md += `**[${rfc.rfcTitle}](${rfc.rfcUrl})** (${rfc.comments.length} comment${rfc.comments.length > 1 ? 's' : ''})\n`;
+          for (const c of rfc.comments) {
+            md += `- "${c.comment.slice(0, 150)}${c.comment.length > 150 ? '...' : ''}" (${new Date(c.createdAt).toLocaleDateString()})\n`;
+          }
+          md += '\n';
         }
       }
 
