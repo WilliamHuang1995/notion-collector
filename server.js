@@ -121,6 +121,81 @@ async function resolveUserIds(notion, name) {
     .map(u => u.id);
 }
 
+// Cache for RFC comments — built once, persists until redeploy
+let commentsCache = null; // Map<userId, [{ rfcId, rfcTitle, rfcUrl, comment, createdAt }]>
+let commentsCacheBuilding = false;
+let commentsCachePromise = null;
+
+async function getCommentsCache(notion, cutoff) {
+  if (commentsCache) return commentsCache;
+  if (commentsCacheBuilding) return commentsCachePromise;
+
+  commentsCacheBuilding = true;
+  commentsCachePromise = buildCommentsCache(notion, cutoff);
+  commentsCache = await commentsCachePromise;
+  commentsCacheBuilding = false;
+  return commentsCache;
+}
+
+async function buildCommentsCache(notion, cutoff) {
+  console.log('Building RFC comments cache...');
+  const cache = new Map(); // userId -> comments[]
+
+  // Fetch all RFCs in window
+  let cursor;
+  const rfcPages = [];
+  do {
+    const response = await notion.databases.query({
+      database_id: RFC_DATABASE_ID,
+      start_cursor: cursor,
+      filter: { property: 'Created at', created_time: { on_or_after: cutoff.toISOString() } },
+      sorts: [{ property: 'Created at', direction: 'descending' }],
+    });
+    rfcPages.push(...response.results);
+    cursor = response.has_more ? response.next_cursor : null;
+  } while (cursor);
+
+  // Fetch comments for each RFC (batched to avoid rate limits)
+  for (let i = 0; i < rfcPages.length; i += 5) {
+    const batch = rfcPages.slice(i, i + 5);
+    await Promise.all(batch.map(async (page) => {
+      try {
+        const rfcTitle = page.properties['Name']?.title?.map(t => t.plain_text).join('') || 'Untitled';
+        const rfcUrl = page.url;
+        const rfcId = page.id;
+
+        let commentCursor;
+        do {
+          const res = await notion.comments.list({ block_id: rfcId, start_cursor: commentCursor });
+          for (const comment of res.results) {
+            const userId = comment.created_by?.id;
+            const userName = comment.created_by?.name || '';
+            if (!userId) continue;
+
+            const text = comment.rich_text?.map(t => t.plain_text).join('') || '';
+            const entry = { rfcId, rfcTitle, rfcUrl, comment: text, createdAt: comment.created_time, userName };
+
+            if (!cache.has(userId)) cache.set(userId, []);
+            cache.get(userId).push(entry);
+          }
+          commentCursor = res.has_more ? res.next_cursor : null;
+        } while (commentCursor);
+      } catch { /* skip inaccessible pages */ }
+    }));
+  }
+
+  console.log(`Comments cache built: ${rfcPages.length} RFCs, ${[...cache.values()].reduce((s, c) => s + c.length, 0)} comments`);
+  return cache;
+}
+
+function getCommentsForUser(cache, userIds) {
+  const comments = [];
+  for (const id of userIds) {
+    if (cache.has(id)) comments.push(...cache.get(id));
+  }
+  return comments.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
 // GET /api/users — returns all workspace users for autocomplete
 app.get('/api/users', requireAuth, notionClient, async (req, res) => {
   try {
@@ -144,10 +219,24 @@ app.get('/api/stats', requireAuth, notionClient, async (req, res) => {
 
     const userIds = await resolveUserIds(req.notion, name);
 
-    const [rfcData, sharedNotesData, incidentData] = await Promise.all([
+    const [rfcData, sharedNotesData, incidentData, commentsData] = await Promise.all([
       getRFCStats(req.notion, name, userIds, cutoff),
       getSharedNotesStats(req.notion, name, cutoff),
       getIncidentStats(req.notion, name, userIds, cutoff),
+      getCommentsCache(req.notion, cutoff).then(cache => {
+        const comments = getCommentsForUser(cache, userIds);
+        const rfcsCommented = [...new Set(comments.map(c => c.rfcId))];
+        return {
+          total: comments.length,
+          rfcsCommented: rfcsCommented.length,
+          comments: comments.map(c => ({
+            rfcTitle: c.rfcTitle,
+            rfcUrl: c.rfcUrl,
+            comment: c.comment,
+            createdAt: c.createdAt,
+          })),
+        };
+      }),
     ]);
 
     res.json({
@@ -157,6 +246,7 @@ app.get('/api/stats', requireAuth, notionClient, async (req, res) => {
       rfc: rfcData,
       sharedNotes: sharedNotesData,
       incidents: incidentData,
+      comments: commentsData,
     });
   } catch (err) {
     console.error(err);

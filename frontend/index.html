@@ -425,6 +425,11 @@
       <h2>Incidents</h2>
       <div id="incidents-content"></div>
     </div>
+
+    <div class="section">
+      <h2>RFC Comments</h2>
+      <div id="comments-content"></div>
+    </div>
   </div>
 
   <script>
@@ -623,6 +628,30 @@
         `).join('') + '</ul>';
         incContent.innerHTML = html;
       }
+
+      // Comments
+      const cmt = data.comments;
+      const cmtContent = document.getElementById('comments-content');
+      if (cmt.total === 0) {
+        cmtContent.innerHTML = '<p class="empty">No RFC comments in this window</p>';
+      } else {
+        let html = `
+          <div class="stats-grid">
+            <div class="stat"><div class="value">${cmt.total}</div><div class="label">Comments left</div></div>
+            <div class="stat"><div class="value">${cmt.rfcsCommented}</div><div class="label">RFCs commented on</div></div>
+          </div>
+        `;
+        html += '<ul class="rfc-list">' + cmt.comments.map(c => `
+          <li>
+            <div>
+              <a class="rfc-title" href="${esc(c.rfcUrl)}" target="_blank">${esc(c.rfcTitle)}</a>
+              <div style="font-size:0.7rem;color:var(--text-dim);margin-top:3px;">${esc(c.comment.slice(0, 150))}${c.comment.length > 150 ? '...' : ''}</div>
+            </div>
+            <span style="color:var(--text-dim);font-size:0.75rem;white-space:nowrap">${new Date(c.createdAt).toLocaleDateString()}</span>
+          </li>
+        `).join('') + '</ul>';
+        cmtContent.innerHTML = html;
+      }
     }
 
     function statusClass(status) {
@@ -673,6 +702,19 @@
         md += `- **Roles:** ${Object.entries(inc.roleBreakdown).map(([k,v]) => `${k} (${v})`).join(', ')}\n\n`;
         for (const i of inc.incidents) {
           md += `- [${i.title}](${i.url}) — ${i.roles.join(', ')}\n`;
+        }
+        md += '\n';
+      }
+
+      md += `### RFC Comments\n`;
+      const cmt = d.comments;
+      if (cmt.total === 0) {
+        md += `No RFC comments in this window.\n`;
+      } else {
+        md += `- **Total comments:** ${cmt.total}\n`;
+        md += `- **RFCs commented on:** ${cmt.rfcsCommented}\n\n`;
+        for (const c of cmt.comments) {
+          md += `- [${c.rfcTitle}](${c.rfcUrl}) — "${c.comment.slice(0, 100)}${c.comment.length > 100 ? '...' : ''}" (${new Date(c.createdAt).toLocaleDateString()})\n`;
         }
       }
 
