@@ -9,24 +9,24 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #08090a;
-      --surface: #111214;
-      --surface-raised: #181a1e;
-      --border: #1f2228;
-      --border-subtle: #16181c;
-      --text: #e8e9eb;
-      --text-muted: #6b7080;
-      --text-dim: #3d4250;
-      --accent: #c4f04d;
-      --accent-dim: #3a4a1a;
-      --link: #8bb4f0;
-      --link-hover: #b8d4ff;
-      --green: #4ade80;
-      --green-bg: #0a2618;
-      --amber: #fbbf24;
-      --amber-bg: #1a1508;
-      --red: #f87171;
-      --red-bg: #1a0a0a;
+      --bg: #1a1b1e;
+      --surface: #222326;
+      --surface-raised: #2a2c30;
+      --border: #35383f;
+      --border-subtle: #2d2f35;
+      --text: #d4d5d9;
+      --text-muted: #9a9da6;
+      --text-dim: #6b6e78;
+      --accent: #a3d44a;
+      --accent-dim: #2d3d18;
+      --link: #7ea8d4;
+      --link-hover: #a8c8e8;
+      --green: #6bc98a;
+      --green-bg: #1a2e22;
+      --amber: #d4a84a;
+      --amber-bg: #2a2418;
+      --red: #d47171;
+      --red-bg: #2a1818;
       --radius: 12px;
       --font-display: 'Instrument Serif', serif;
       --font-mono: 'IBM Plex Sans', sans-serif;
@@ -371,6 +371,14 @@
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
 
+    .collapsible { cursor: pointer; user-select: none; }
+    .collapsible:hover { color: var(--link-hover); }
+    .collapsible::before { content: '▸'; display: inline-block; width: 1rem; transition: transform 0.15s; }
+    .collapsible.open::before { transform: rotate(90deg); }
+    .collapse-body { display: none; padding-left: 1rem; }
+    .collapse-body.open { display: block; }
+    .comment-text { font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; margin-top: 0.3rem; white-space: pre-wrap; word-break: break-word; }
+
     @media (max-width: 600px) {
       body { padding: 1.5rem 1rem; }
       .header h1 { font-size: 2rem; }
@@ -642,18 +650,20 @@
             <div class="stat"><div class="value">${cmt.rfcsCommented}</div><div class="label">RFCs commented on</div></div>
           </div>
         `;
-        html += cmt.byRfc.map(rfc => `
-          <div style="margin-bottom:1rem;">
-            <a class="rfc-title" href="${esc(rfc.rfcUrl)}" target="_blank" style="font-size:0.85rem;font-weight:500;">${esc(rfc.rfcTitle)}</a>
-            <span style="color:var(--text-dim);font-size:0.7rem;margin-left:0.5rem;">${rfc.comments.length} comment${rfc.comments.length > 1 ? 's' : ''}</span>
-            <ul class="rfc-list" style="margin-top:0.4rem;">
+        html += cmt.byRfc.map((rfc, idx) => `
+          <div style="margin-bottom:0.75rem;">
+            <div class="collapsible open" onclick="toggleCollapse(this)">
+              <a class="rfc-title" href="${esc(rfc.rfcUrl)}" target="_blank" onclick="event.stopPropagation()" style="font-size:0.85rem;">${esc(rfc.rfcTitle)}</a>
+              <span style="color:var(--text-dim);font-size:0.7rem;margin-left:0.5rem;">${rfc.comments.length} comment${rfc.comments.length > 1 ? 's' : ''}</span>
+            </div>
+            <div class="collapse-body open" id="cmt-group-${idx}">
               ${rfc.comments.map(c => `
-                <li style="padding:0.4rem 0;">
-                  <span style="font-size:0.75rem;color:var(--text-muted);">${esc(c.comment.slice(0, 200))}${c.comment.length > 200 ? '...' : ''}</span>
-                  <span style="color:var(--text-dim);font-size:0.7rem;white-space:nowrap">${new Date(c.createdAt).toLocaleDateString()}</span>
-                </li>
+                <div style="padding:0.5rem 0;border-bottom:1px solid var(--border-subtle);">
+                  <div class="comment-text">${esc(c.comment)}</div>
+                  <div style="font-size:0.7rem;color:var(--text-dim);margin-top:0.3rem;">${new Date(c.createdAt).toLocaleDateString()}</div>
+                </div>
               `).join('')}
-            </ul>
+            </div>
           </div>
         `).join('');
         cmtContent.innerHTML = html;
@@ -673,13 +683,13 @@
       let md = `## ${d.engineer} — Notion Activity (${d.window})\n\n`;
 
       md += `### RFCs\n`;
-      md += `- **Total:** ${d.rfc.total}\n`;
-      md += `- **Reviewed:** ${d.rfc.reviewed}\n`;
-      if (d.rfc.avgDaysToReview !== null) md += `- **Avg days to review:** ${d.rfc.avgDaysToReview}\n`;
-      md += `- **Status:** ${Object.entries(d.rfc.statusBreakdown).map(([k,v]) => `${k} (${v})`).join(', ')}\n\n`;
+      md += `- **Total:** ${d.rfc.total} | **Reviewed:** ${d.rfc.reviewed}`;
+      if (d.rfc.avgDaysToReview !== null) md += ` | **Avg days to review:** ${d.rfc.avgDaysToReview}`;
+      md += '\n\n';
       if (d.rfc.titles.length > 0) {
+        md += `| RFC | Status |\n|---|---|\n`;
         for (const r of d.rfc.titles) {
-          md += `- [${r.title}](${r.url}) — ${r.status}\n`;
+          md += `| [${r.title}](${r.url}) | ${r.status} |\n`;
         }
         md += '\n';
       }
@@ -689,11 +699,11 @@
       if (!sn.found) {
         md += `${sn.message}\n\n`;
       } else {
-        md += `- **Total entries:** ${sn.totalEntries}\n`;
-        md += `- **Last updated:** ${sn.lastUpdated ? new Date(sn.lastUpdated).toLocaleDateString() : '—'}\n\n`;
-        if (sn.recentEntries) {
+        md += `- **Total entries:** ${sn.totalEntries} | **Last updated:** ${sn.lastUpdated ? new Date(sn.lastUpdated).toLocaleDateString() : '—'}\n\n`;
+        if (sn.recentEntries && sn.recentEntries.length > 0) {
+          md += `| Title | Last Edited |\n|---|---|\n`;
           for (const e of sn.recentEntries) {
-            md += `- [${e.title}](${e.url}) — ${new Date(e.lastEdited).toLocaleDateString()}\n`;
+            md += `| [${e.title}](${e.url}) | ${new Date(e.lastEdited).toLocaleDateString()} |\n`;
           }
           md += '\n';
         }
@@ -702,12 +712,12 @@
       md += `### Incidents\n`;
       const inc = d.incidents;
       if (inc.total === 0) {
-        md += `No incident involvement in this window.\n`;
+        md += `No incident involvement in this window.\n\n`;
       } else {
-        md += `- **Total:** ${inc.total}\n`;
-        md += `- **Roles:** ${Object.entries(inc.roleBreakdown).map(([k,v]) => `${k} (${v})`).join(', ')}\n\n`;
+        md += `- **Total:** ${inc.total} | **Roles:** ${Object.entries(inc.roleBreakdown).map(([k,v]) => `${k} (${v})`).join(', ')}\n\n`;
+        md += `| Incident | Role |\n|---|---|\n`;
         for (const i of inc.incidents) {
-          md += `- [${i.title}](${i.url}) — ${i.roles.join(', ')}\n`;
+          md += `| [${i.title}](${i.url}) | ${i.roles.join(', ')} |\n`;
         }
         md += '\n';
       }
@@ -717,14 +727,12 @@
       if (cmt.total === 0) {
         md += `No RFC comments in this window.\n`;
       } else {
-        md += `- **Total comments:** ${cmt.total}\n`;
-        md += `- **RFCs commented on:** ${cmt.rfcsCommented}\n\n`;
+        md += `- **Total comments:** ${cmt.total} | **RFCs commented on:** ${cmt.rfcsCommented}\n\n`;
+        md += `| RFC | Comment | Date |\n|---|---|---|\n`;
         for (const rfc of cmt.byRfc) {
-          md += `**[${rfc.rfcTitle}](${rfc.rfcUrl})** (${rfc.comments.length} comment${rfc.comments.length > 1 ? 's' : ''})\n`;
           for (const c of rfc.comments) {
-            md += `- "${c.comment.slice(0, 150)}${c.comment.length > 150 ? '...' : ''}" (${new Date(c.createdAt).toLocaleDateString()})\n`;
+            md += `| [${rfc.rfcTitle}](${rfc.rfcUrl}) | ${c.comment.slice(0, 120).replace(/\|/g, '\\|').replace(/\n/g, ' ')}${c.comment.length > 120 ? '...' : ''} | ${new Date(c.createdAt).toLocaleDateString()} |\n`;
           }
-          md += '\n';
         }
       }
 
@@ -744,6 +752,12 @@
       if (days < 30) return days + 'd ago';
       if (days < 365) return Math.floor(days / 30) + 'mo ago';
       return Math.floor(days / 365) + 'y ago';
+    }
+
+    function toggleCollapse(el) {
+      el.classList.toggle('open');
+      const body = el.nextElementSibling;
+      body.classList.toggle('open');
     }
   </script>
 </body>
